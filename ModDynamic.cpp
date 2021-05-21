@@ -17,7 +17,16 @@ double scale = 1; //设置缩放倍数
 int margin = 4; //帧间隔
 double limit_dis_epi = 2; //距离极线的距离
 
+ModDynamic::ModDynamic()
+{
+    scale = 1.0;
+    setFrameROI(Rect(frame.cols / 16, frame.rows / 3, 7 * frame.cols / 8, frame.rows / 2));
+}
 
+void ModDynamic::setFrameROI(Rect rect)
+{
+    ROI = rect;
+}
 
 bool ROI_mod(int x1, int y1)
 {
@@ -80,11 +89,26 @@ bool ModDynamic::judgeStable(const vector<Point2f>& lastPoint, const vector<Poin
 	return false;
 }
 
+/*void ModDynamic::GetInitCornerPoints(const Mat& curGrayImage, const Mat& lastGrayImage, vector<Point2f>& curPoint, vector<Point2f>& lastPoint, vector<uchar>& state)const
+{
+    double t = (double)cvGetTickCount();
+    goodFeaturesToTrack(lastGrayImage, lastPoint, 100, 0.01, 8, Mat(), 3, false, 0.04);
+    cout << "cost timeA: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
+    cornerSubPix(lastGrayImage, lastPoint, Size(10, 10), Size(-1, -1), TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.03));
+    cout << "cost timeB: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
+    calcOpticalFlowPyrLK(lastGrayImage, curGrayImage, lastPoint, curPoint, state, err, Size(22, 22), 5, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.01));
+    cout << "cost timeC: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
+}*/
+
 void ModDynamic::GetInitCornerPoints(const Mat& curGrayImage, const Mat& lastGrayImage, vector<Point2f>& curPoint, vector<Point2f>& lastPoint, vector<uchar>& state)const
 {
+    double t = (double)cvGetTickCount();
     goodFeaturesToTrack(lastGrayImage, lastPoint, 200, 0.01, 8, Mat(), 3, true, 0.04);
+    cout << "cost timeA: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
     cornerSubPix(lastGrayImage, lastPoint, Size(10, 10), Size(-1, -1), TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.03));
+    cout << "cost timeB: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
     calcOpticalFlowPyrLK(lastGrayImage, curGrayImage, lastPoint, curPoint, state, err, Size(22, 22), 5, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.01));
+    cout << "cost timeC: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
 }
 
 void ModDynamic::DrawCornersInImage(Mat& frame, const vector<Point2f>& corners, const vector<uchar>& state, Scalar scalar)const
@@ -157,9 +181,11 @@ void ModDynamic::CalculateFundMatrix(const vector<Point2f>& curPoint, const vect
                 double C = fundMatrix.at<double>(2, 0)*initLastPoint[i].x + fundMatrix.at<double>(2, 1)*initLastPoint[i].y + fundMatrix.at<double>(2, 2);
                 double distant = fabs(A*initCurPoint[i].x + B*initCurPoint[i].y + C) / sqrt(A*A + B*B);
                 sumDistant += distant;
-
-                optLastPoint.push_back(initLastPoint[i]);
-                optCurPoint.push_back(initCurPoint[i]);
+                if(distant <= 0.1)
+                {
+                    optLastPoint.push_back(initLastPoint[i]);
+                    optCurPoint.push_back(initCurPoint[i]);
+                }
             }
         }
         initLastPoint = optLastPoint;
@@ -182,10 +208,45 @@ void ModDynamic::GetMoveCorners(const vector<Point2f>& curPoint, const vector<Po
 
             if (distant <= limit_dis_epi)
                 continue;
-            cout << "dis: " << distant << endl;
             moveCorners.push_back(curPoint[i]);
         }
     }
+}
+
+void ModDynamic::GetGridAreaCorners(const Size& frameSize, const vector<Point2f>& moveCorners, int gridWidth, double gridCornersNum[100][100])const
+{
+    for (int i = 0; i < frameSize.height / gridWidth; i++)
+        for (int j = 0; j < frameSize.width / gridWidth; j++)
+        {
+            double x1 = i*gridWidth + gridWidth / 2;
+            double y1 = j*gridWidth + gridWidth / 2;
+            for (int k = 0; k < moveCorners.size(); k++)
+                if (ROI_mod(moveCorners[k].x, moveCorners[k].y) && 
+                    sqrt((moveCorners[k].x - y1)*(moveCorners[k].x - y1) + (moveCorners[k].y - x1)*(moveCorners[k].y - x1)) < gridWidth*sqrt(2)) 
+                    gridCornersNum[i][j]++;
+        }
+}
+
+void ModDynamic::DrawMovingObject(Mat& frame, const Size& frameSize, int gridWidth, double gridCornersNum[100][100])const
+{
+    double mm = 0;
+    int mark_i = 0, mark_j = 0;
+    for (int i = 0; i < frameSize.height / gridWidth; i++)
+        for (int j = 0; j < frameSize.width / gridWidth; j++)
+            if (ROI_mod(j*gridWidth, i*gridWidth) && gridCornersNum[i][j] > mm)
+            {
+                mark_i = i;
+                mark_j = j;
+                mm = gridCornersNum[i][j];
+                if (mm < 2) 
+                    continue;
+                rectangle(frame, Point(mark_j*gridWidth / scale - rec_width, mark_i*gridWidth / scale + rec_width), Point(mark_j*gridWidth / scale + rec_width, mark_i*gridWidth / scale - rec_width), Scalar(0, 255, 255), 3);
+            }
+}
+
+void MovingObjectDetect(Mat frame, Mat lastFrame)
+{
+    return;
 }
 
 int main(int, char**)
@@ -228,63 +289,40 @@ int main(int, char**)
 		{
 			//calcOpticalFlowPyrLK光流
             mod.GetInitCornerPoints(curGrayImage, lastGrayImage, curPoint, lastPoint, state);
+
+            cout << "cost time1: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
+
 			mod.OpticalFlowCorners(curGrayImage, lastGrayImage, curPoint, lastPoint, state);
             
             mod.DrawCornersInImage(curFrame, curPoint, state, Scalar(0, 0, 255));
 			mod.DrawCornersInImage(lastFrame, lastPoint, state, Scalar(0, 0, 255));
-			
+			 cout << "cost timeD: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
             mod.CalculateFundMatrix(curPoint, lastPoint, state, fundMatrix);
-            
+            cout << "cost timeE: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
 			//T：异常角点集
 			vector<Point2f> moveObjectCorners;
             mod.GetMoveCorners(curPoint, lastPoint, fundMatrix, state, moveObjectCorners);
 
-			//Draw mod
-			{
-				int tt = 10;
-                double flag_meiju[100][100] = {0};
-				for (int i = 0; i < curGrayImage.rows / tt; i++)
-					for (int j = 0; j < curGrayImage.cols / tt; j++)
-					{
-					    double x1 = i*tt + tt / 2;
-					    double y1 = j*tt + tt / 2;
-					    for (int k = 0; k < moveObjectCorners.size(); k++)
-						    if (ROI_mod(moveObjectCorners[k].x, moveObjectCorners[k].y) && 
-                                sqrt((moveObjectCorners[k].x - y1)*(moveObjectCorners[k].x - y1) + (moveObjectCorners[k].y - x1)*(moveObjectCorners[k].y - x1)) < tt*sqrt(2)) 
-                                    flag_meiju[i][j]++;
-					}
-				double mm = 0;
-				int mark_i = 0, mark_j = 0;
-				for (int i = 0; i < curGrayImage.rows / tt; i++)
-					for (int j = 0; j < curGrayImage.cols / tt; j++)
-						if (ROI_mod(j*tt, i*tt) && flag_meiju[i][j] > mm)
-						{
-					        mark_i = i;
-					        mark_j = j;
-					        mm = flag_meiju[i][j];
-					        if (mm < 2) 
-                                continue;
-					        rectangle(frame, Point(mark_j*tt / scale - rec_width, mark_i*tt / scale + rec_width), Point(mark_j*tt / scale + rec_width, mark_i*tt / scale - rec_width), Scalar(0, 255, 255), 3);
-						}
-			}
-			//绘制ROI
+            int gridWidth = 10;
+            double gridCornersNum[100][100] = {0};
+            mod.GetGridAreaCorners(curFrame.size(), moveObjectCorners, gridWidth, gridCornersNum);
+			mod.DrawMovingObject(frame, curFrame.size(), gridWidth, gridCornersNum);
+            cout << "cost timeF: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
 			rectangle(frame, Point(width / 16 / scale, height * 5 / 6 / scale), Point((width - width / 16) / scale, height / 3 / scale), Scalar(255, 0, 0), 1, 0);
 
-			//输出结果图
-			cvNamedWindow("img_scale", 0);
-			imshow("img_scale", curFrame);
-			cvNamedWindow("pre", 0);
-			imshow("pre", lastFrame);
-			cvNamedWindow("frame", 0);
-			imshow("frame", frame);
+            imshow("img_scale", curFrame);
+            imshow("pre", lastFrame);
+            imshow("frame", frame);
 		}
+        double delay = 1000./cap.get(CV_CAP_PROP_FPS) - ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.);
+        delay = delay > 0? delay : 27;
 
-		if (waitKey(27) >= 0)
-			break;
+        if (waitKey(delay) >= 0)
+            break;
+        cout << "cost timeF: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
 		std::swap(lastGrayImage, curGrayImage);
         lastFrame = img_temp.clone();
-		t = (double)cvGetTickCount() - t;
-		cout << "cost time: " << t / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
+		cout << "cost timeG: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
 	}
 	return 0;
 }

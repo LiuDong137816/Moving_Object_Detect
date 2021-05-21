@@ -13,9 +13,10 @@ class ModDynamic
 {
 public:
     ModDynamic();
-    ~ModDynamic();
 
 public:
+    void setFrameROI(cv::Rect rect);
+
     void OpticalFlowCorners(const cv::Mat curGrayImage, const cv::Mat precurGrayImage, const std::vector<cv::Point2f>& curPoint, 
         const std::vector<cv::Point2f>& lastPoint, std::vector<uchar>& state)const;
     
@@ -34,16 +35,15 @@ public:
 
     void GetMoveCorners(const std::vector<cv::Point2f>& curPoint, const std::vector<cv::Point2f>& lastPoint, 
         const cv::Mat& fundMatrix, const std::vector<uchar>& state, std::vector<cv::Point2f>& moveCorners)const;
+
+    void GetGridAreaCorners(const cv::Size& frameSize, const std::vector<cv::Point2f>& moveCorners, int gridWidth, double gridCornersNum[100][100])const;
+
+    void DrawMovingObject(cv::Mat& frame, const cv::Size& frameSize, int gridWidth, double gridCornersNum[100][100])const;
 private:
-
+    cv::Mat frame;
+    cv::Mat lastFrame;
+    cv::Rect ROI;
+    double scale;
 };
-
-ModDynamic::ModDynamic()
-{
-}
-
-ModDynamic::~ModDynamic()
-{
-}
 
 #endif
