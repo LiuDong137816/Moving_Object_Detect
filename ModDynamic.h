@@ -27,7 +27,9 @@ public:
     void MovingObjectDetect();
 
 private:
-    bool ROI_mod(cv::Size frameSize, int x1, int y1)const;
+    bool judgeROI(int x1, int y1)const;
+
+    bool judgeStaticROI(int x1, int y1)const;
 
     void setFrameROI(cv::Rect rect);
 
@@ -48,11 +50,12 @@ private:
     void CalculateFundMatrix(const std::vector<cv::Point2f>& curPoint, const std::vector<cv::Point2f>& lastPoint, const std::vector<uchar>& state, cv::Mat& fundMatrix)const;
 
     void GetMoveCorners(const std::vector<cv::Point2f>& curPoint, const std::vector<cv::Point2f>& lastPoint, 
-        const cv::Mat& fundMatrix, const std::vector<uchar>& state, std::vector<cv::Point2f>& moveCorners)const;
+        const cv::Mat& fundMatrix, const std::vector<uchar>& state, std::vector<cv::Point2f>& moveCorners, std::vector<cv::Point2f>& staticCorners)const;
 
-    void GetGridAreaCorners(const cv::Size& frameSize, const std::vector<cv::Point2f>& moveCorners, int gridWidth, double gridCornersNum[100][100])const;
+    void GetGridAreaCorners(const cv::Size& frameSize, const std::vector<cv::Point2f>& moveCorners, 
+        const std::vector<cv::Point2f>& staticCorners, int gridWidth, double gridCornersNum[100][100][2])const;
 
-    void DrawMovingObject(cv::Mat& frame, const cv::Size& frameSize, int gridWidth, double gridCornersNum[100][100])const;
+    void DrawMovingObject(cv::Mat& frame, const cv::Size& frameSize, int gridWidth, double gridCornersNum[100][100][2])const;
 private:
     cv::Mat frame;
     cv::Mat lastGrayFrame;
