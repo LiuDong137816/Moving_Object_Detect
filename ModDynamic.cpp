@@ -8,9 +8,9 @@ using namespace std;
 
 ///调参点
 double scale = 1; //设置缩放倍数
-int margin = 1; //帧间隔
 double limit_dis_epi = 2; //距离极线的距离
 
+void printRunTime(string str, double beginTime);
 ModDynamic::ModDynamic()
 {
     scale = 0.5;
@@ -99,21 +99,13 @@ void ModDynamic::GetInitCornerPoints(const Mat& curGrayImage, const Mat& lastGra
     Mat mask = Mat::zeros(curGrayImage.size(), CV_8UC1);
     mask(ROI).setTo(255);
     goodFeaturesToTrack(curGrayImage, curPoint, 100, 0.01, 8, mask, 3, true, 0.04);
-    cout << "cost timeA: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
+    printRunTime("goodFeaturesToTrack time", t);
+
     cornerSubPix(curGrayImage, curPoint, Size(10, 10), Size(-1, -1), TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.03));
-    cout << "cost timeB: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
-    calcOpticalFlowPyrLK(curGrayImage, lastGrayImage, curPoint, lastPoint, state, err, Size(22, 22), 5, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.01));
-    
-    Mat drawImage = Mat::zeros(Size(2 * curGrayImage.cols, curGrayImage.rows), CV_8UC1);
-    lastGrayImage.copyTo(drawImage.colRange(0, curGrayImage.cols));
-    curGrayImage.copyTo(drawImage.colRange(curGrayImage.cols, 2 * curGrayImage.cols));
-    int pointSize = curPoint.size();
-    int width = curGrayImage.cols;
-    for(int i = 0; i < pointSize; ++i)
-    {
-        line(drawImage, lastPoint[i], Point2f(curPoint[i].x + width, curPoint[i].y), Scalar(0));
-    }
-    cout << "cost timeC: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
+    printRunTime("cornerSubPix time", t);
+
+    calcOpticalFlowPyrLK(curGrayImage, lastGrayImage, curPoint, lastPoint, state, err, Size(21, 21), 5, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 20, 0.01));
+    printRunTime("calcOpticalFlowPyrLK time", t);
 }
 #endif
 
@@ -205,7 +197,7 @@ void ModDynamic::CalculateFundMatrix(const vector<Point2f>& curPoint, const vect
 }
 
 void ModDynamic::GetMoveCorners(const vector<Point2f>& curPoint, const vector<Point2f>& lastPoint, const Mat& fundMatrix, 
-                                const vector<uchar>& state, vector<Point2f>& moveCorners, vector<Point2f>& staticCorners)const
+                                const vector<uchar>& state, vector<Point2f>& moveCorners, vector<Point2f>& staticCorners)
 {
     size_t pointSize = curPoint.size();
     for (size_t i = 0; i < pointSize; ++i)
@@ -223,7 +215,12 @@ void ModDynamic::GetMoveCorners(const vector<Point2f>& curPoint, const vector<Po
                 continue;
             }
             moveCorners.push_back(curPoint[i]);
+            circle(frame, curPoint[i], 3, Scalar(0, 0, 255), -1);
         }
+    }
+    if(moveCorners.size() != 0)
+    {
+        int a = 1;
     }
 }
 
@@ -256,8 +253,7 @@ void ModDynamic::GetGridAreaCorners(const Size& frameSize, const vector<Point2f>
 
 void ModDynamic::DrawMovingObject(Mat& frame, const Size& frameSize, int gridWidth, double gridCornersNum[100][100][2])const
 {
-    rectangle(frame, Point(frame.cols / 16, frame.rows * 5 / 6 ), Point(15 * frame.cols / 16, frame.rows / 3), Scalar(255, 0, 0), 1);
-    int rec_width = frame.cols / 25;
+    rectangle(frame, Point(ROI.x, ROI.y), Point(ROI.x + ROI.width, ROI.y + ROI.height), Scalar(255, 0, 0), 1);
     double mm1 = 0, mm2 = 0;
     for (int i = 0; i < frameSize.height / gridWidth; i++)
         for (int j = 0; j < frameSize.width / gridWidth; j++)
@@ -267,23 +263,23 @@ void ModDynamic::DrawMovingObject(Mat& frame, const Size& frameSize, int gridWid
                 if(gridCornersNum[i][j][0] > mm1)
                 {
                     mm1 = gridCornersNum[i][j][0];
-                    if (mm1 < 2) 
+                    if (mm1 < 3) 
                         continue;
                     circle(frame, Point(j*gridWidth, i*gridWidth), 2, Scalar(0, 0, 255), 1);
-                    rectangle(frame, Point(j*gridWidth - rec_width, i*gridWidth + rec_width), 
-                        Point(j*gridWidth + rec_width, i*gridWidth - rec_width), Scalar(0, 255, 255), 3);
+                    rectangle(frame, Point(j*gridWidth - gridWidth, i*gridWidth + gridWidth), 
+                        Point(j*gridWidth + gridWidth, i*gridWidth - gridWidth), Scalar(0, 255, 255), 3);
                 }
             }
 
             if (judgeStaticROI(j*gridWidth, i*gridWidth))
             {
-                if(gridCornersNum[i][j][1] > mm1)
+                if(gridCornersNum[i][j][1] > mm2)
                 {
                     mm2 = gridCornersNum[i][j][1];
                     if (mm2 < 3) 
                         continue;
-                    rectangle(frame, Point(j*gridWidth - rec_width, i*gridWidth + rec_width), 
-                        Point(j*gridWidth + rec_width, i*gridWidth - rec_width), Scalar(0, 0, 255), 3);
+                    rectangle(frame, Point(j*gridWidth - gridWidth, i*gridWidth + gridWidth), 
+                        Point(j*gridWidth + gridWidth, i*gridWidth - gridWidth), Scalar(0, 0, 255), 3);
                 }
             }
         }
@@ -310,16 +306,15 @@ void ModDynamic::MovingObjectDetect()
     vector<Point2f> lastPoint, curPoint;
     vector<uchar> state;
     GetInitCornerPoints(curGrayImage, lastGrayFrame, curPoint, lastPoint, state);
-    cout << "cost time1: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
 
     OpticalFlowCorners(curGrayImage, lastGrayFrame, curPoint, lastPoint, state);
+    printRunTime("OpticalFlowCorners time", t);
 
     //mod.DrawCornersInImage(curFrame, curPoint, state, Scalar(0, 0, 255));
     //mod.DrawCornersInImage(lastFrame, lastPoint, state, Scalar(0, 0, 255));
-    cout << "cost timeD: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
     CalculateFundMatrix(curPoint, lastPoint, state, fundMatrix);
-    cout << "cost timeE: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
-    //T：异常角点集
+    printRunTime("CalculateFundMatrix time", t);
+
     vector<Point2f> moveObjectCorners;
     vector<Point2f> staticObjectCorners;
     GetMoveCorners(curPoint, lastPoint, fundMatrix, state, moveObjectCorners, staticObjectCorners);
@@ -328,9 +323,20 @@ void ModDynamic::MovingObjectDetect()
     double gridCornersNum[100][100][2] = {0};
     GetGridAreaCorners(curGrayImage.size(), moveObjectCorners, staticObjectCorners, gridWidth, gridCornersNum);
     DrawMovingObject(frame, frame.size(), gridWidth, gridCornersNum);
+
+    Mat drawImage = Mat::zeros(Size(2 * curGrayImage.cols, curGrayImage.rows), CV_8UC1);
+    lastGrayFrame.copyTo(drawImage.colRange(0, curGrayImage.cols));
+    curGrayImage.copyTo(drawImage.colRange(curGrayImage.cols, 2 * curGrayImage.cols));
+    int pointSize = curPoint.size();
+    int width = curGrayImage.cols;
+    for(int i = 0; i < pointSize; ++i)
+    {
+        line(drawImage, lastPoint[i], Point2f(curPoint[i].x + width, curPoint[i].y), Scalar(0));
+    }
     imshow("frame", frame);
+    imshow("drawImage", drawImage);
+
     std::swap(curGrayImage, lastGrayFrame);
-    //imshow("frame", frame);
 }
 
 void printRunTime(string str, double beginTime)
@@ -394,12 +400,13 @@ int main(int, char**)
 {
     int frameCount = 0;
 	VideoCapture cap;
-	 cap.open(findVideoFile());
-    //cap.open("Demo3.mp4");
+	cap.open(findVideoFile());
 	if (!cap.isOpened())
 		return -1;
 
     int num = cap.get(CV_CAP_PROP_FPS);
+    int margin = num / 10 + 1; //帧间隔
+
     Mat frame;
     ModDynamic mod;
     while (true)
@@ -424,8 +431,7 @@ int main(int, char**)
         delay = delay >= 27? delay : 27;
         if (waitKey(delay) >= 0)
             break;
-		cout << "cost timeG: " << ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.) << "ms" << endl;
-	}
+    }
 	return 0;
 }
 

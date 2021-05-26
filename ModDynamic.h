@@ -50,7 +50,7 @@ private:
     void CalculateFundMatrix(const std::vector<cv::Point2f>& curPoint, const std::vector<cv::Point2f>& lastPoint, const std::vector<uchar>& state, cv::Mat& fundMatrix)const;
 
     void GetMoveCorners(const std::vector<cv::Point2f>& curPoint, const std::vector<cv::Point2f>& lastPoint, 
-        const cv::Mat& fundMatrix, const std::vector<uchar>& state, std::vector<cv::Point2f>& moveCorners, std::vector<cv::Point2f>& staticCorners)const;
+        const cv::Mat& fundMatrix, const std::vector<uchar>& state, std::vector<cv::Point2f>& moveCorners, std::vector<cv::Point2f>& staticCorners);
 
     void GetGridAreaCorners(const cv::Size& frameSize, const std::vector<cv::Point2f>& moveCorners, 
         const std::vector<cv::Point2f>& staticCorners, int gridWidth, double gridCornersNum[100][100][2])const;
