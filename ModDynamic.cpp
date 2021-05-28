@@ -265,9 +265,9 @@ void ModDynamic::DrawMovingObject(Mat& frame, const Size& frameSize, int gridWid
                     mm1 = gridCornersNum[i][j][0];
                     if (mm1 < 3) 
                         continue;
-                    circle(frame, Point(j*gridWidth, i*gridWidth), 2, Scalar(0, 0, 255), 1);
-                    rectangle(frame, Point(j*gridWidth - gridWidth, i*gridWidth + gridWidth), 
-                        Point(j*gridWidth + gridWidth, i*gridWidth - gridWidth), Scalar(0, 255, 255), 3);
+                    circle(frame, Point(j*gridWidth, i*gridWidth), 2, Scalar(0, 255, 255), 1);
+                    //rectangle(frame, Point(j*gridWidth - gridWidth, i*gridWidth + gridWidth), 
+                        //Point(j*gridWidth + gridWidth, i*gridWidth - gridWidth), Scalar(0, 255, 255), 3);
                 }
             }
 
@@ -278,14 +278,84 @@ void ModDynamic::DrawMovingObject(Mat& frame, const Size& frameSize, int gridWid
                     mm2 = gridCornersNum[i][j][1];
                     if (mm2 < 3) 
                         continue;
-                    rectangle(frame, Point(j*gridWidth - gridWidth, i*gridWidth + gridWidth), 
-                        Point(j*gridWidth + gridWidth, i*gridWidth - gridWidth), Scalar(0, 0, 255), 3);
+                    //rectangle(frame, Point(j*gridWidth - gridWidth, i*gridWidth + gridWidth), 
+                        //Point(j*gridWidth + gridWidth, i*gridWidth - gridWidth), Scalar(0, 0, 255), 3);
                 }
             }
         }
 }
 
-void ModDynamic::MovingObjectDetect()
+double ModDynamic::getDistant(const Point2f& p1, const Point2f& p2)const
+{
+    return std::pow(p1.x - p2.x, 2) + std::pow(p1.y - p2.y, 2);
+}
+
+void ModDynamic::checkPointIsInVec(const Point2f& pointCorner, const vector<vector<Point2f>>& vecMoveCorners, bool& isInVec, size_t& index)const
+{
+    isInVec =false;
+    for(vector<vector<Point2f>>::const_iterator it = vecMoveCorners.begin(); it != vecMoveCorners.end(); ++it)
+    {
+        if(std::count(it->begin(), it->end(), pointCorner))
+        {
+            isInVec = true;
+            index = it - vecMoveCorners.begin();
+        }
+    }
+}
+
+void ModDynamic::classifyPoints(const vector<Point2f>& moveCorners, vector<vector<Point2f>>& vecMoveCorners, double maxDistant)const
+{
+    bool isInVec = false;
+    size_t index = 0;
+    int cornerSize = moveCorners.size();
+    vector<Point2f> nearCorners;
+    for(int i = 0; i < cornerSize; ++i)
+    {
+        checkPointIsInVec(moveCorners[i], vecMoveCorners, isInVec, index);
+        nearCorners.clear();
+        if(!isInVec)
+        {
+            nearCorners.push_back(moveCorners[i]);
+        }
+
+        for(int j = i + 1; j < cornerSize; ++j)
+        {
+            if(getDistant(moveCorners[i], moveCorners[j]) < maxDistant)
+            {
+                if(isInVec)
+                {
+                    size_t index1 = 0;
+                    checkPointIsInVec(moveCorners[j], vecMoveCorners, isInVec, index1);
+                    if(!isInVec)
+                    {
+                        vecMoveCorners[index].push_back(moveCorners[j]);
+                    }
+                }
+                else
+                {
+                    checkPointIsInVec(moveCorners[j], vecMoveCorners, isInVec, index);
+                    if(isInVec)
+                    {
+                        vecMoveCorners[index].insert(vecMoveCorners[index].end(), nearCorners.begin(), nearCorners.end());
+                        nearCorners.clear();
+                    }
+                    else
+                    {
+                        nearCorners.push_back(moveCorners[j]);
+                    } 
+                }    
+            }
+        }
+        if(!nearCorners.empty())
+        {
+            vecMoveCorners.push_back(nearCorners);
+        }
+    }
+    
+    return;
+}
+
+bool ModDynamic::MovingObjectDetect()
 {
     double t = (double)cvGetTickCount();
     Mat curGrayImage;
@@ -299,7 +369,7 @@ void ModDynamic::MovingObjectDetect()
     {
         std::swap(lastGrayFrame, curGrayImage);
         setFrameROI(Rect(0, frame.rows / 2, frame.cols, 3 * frame.rows / 8));
-        return;
+        return false;
     }
     
     Mat fundMatrix;
@@ -318,11 +388,13 @@ void ModDynamic::MovingObjectDetect()
     vector<Point2f> moveObjectCorners;
     vector<Point2f> staticObjectCorners;
     GetMoveCorners(curPoint, lastPoint, fundMatrix, state, moveObjectCorners, staticObjectCorners);
+    vector<vector<Point2f>> moveObject;
 
     int gridWidth = 10;
-    double gridCornersNum[100][100][2] = {0};
-    GetGridAreaCorners(curGrayImage.size(), moveObjectCorners, staticObjectCorners, gridWidth, gridCornersNum);
-    DrawMovingObject(frame, frame.size(), gridWidth, gridCornersNum);
+    //double gridCornersNum[100][100][2] = {0};
+    //GetGridAreaCorners(curGrayImage.size(), moveObjectCorners, staticObjectCorners, gridWidth, gridCornersNum);
+    //DrawMovingObject(frame, frame.size(), gridWidth, gridCornersNum);
+    classifyPoints(moveObjectCorners, moveObject, 100);
 
     Mat drawImage = Mat::zeros(Size(2 * curGrayImage.cols, curGrayImage.rows), CV_8UC1);
     lastGrayFrame.copyTo(drawImage.colRange(0, curGrayImage.cols));
@@ -337,6 +409,9 @@ void ModDynamic::MovingObjectDetect()
     imshow("drawImage", drawImage);
 
     std::swap(curGrayImage, lastGrayFrame);
+    if(moveObjectCorners.size() != 0)
+        return true;
+    return false;
 }
 
 void printRunTime(string str, double beginTime)
@@ -423,7 +498,7 @@ int main(int, char**)
 			continue;
 		}
         
-		mod.MovingObjectDetect();
+		bool isMove = mod.MovingObjectDetect();
         printRunTime("MOD time", t);
         double time1 = 1000.* margin /cap.get(CV_CAP_PROP_FPS);
         double time2 = ((double)cvGetTickCount() - t) / ((double)cvGetTickFrequency()*1000.);
@@ -431,6 +506,8 @@ int main(int, char**)
         delay = delay >= 27? delay : 27;
         if (waitKey(delay) >= 0)
             break;
+        if(isMove)
+            int aa = 1;
     }
 	return 0;
 }

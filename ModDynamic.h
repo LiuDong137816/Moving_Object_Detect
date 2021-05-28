@@ -24,7 +24,7 @@ public:
         lastGrayFrame = image;
     }
 
-    void MovingObjectDetect();
+    bool MovingObjectDetect();
 
 private:
     bool judgeROI(int x1, int y1)const;
@@ -51,6 +51,12 @@ private:
 
     void GetMoveCorners(const std::vector<cv::Point2f>& curPoint, const std::vector<cv::Point2f>& lastPoint, 
         const cv::Mat& fundMatrix, const std::vector<uchar>& state, std::vector<cv::Point2f>& moveCorners, std::vector<cv::Point2f>& staticCorners);
+
+    double getDistant(const cv::Point2f& p1, const cv::Point2f& p2)const;
+
+    void checkPointIsInVec(const cv::Point2f& pointCorner, const std::vector<std::vector<cv::Point2f>>& vecMoveCorners, bool& isInVec, size_t& index)const;
+
+    void classifyPoints(const std::vector<cv::Point2f>& moveCorners, std::vector<std::vector<cv::Point2f>>& vecMoveCorners, double maxDistant)const;
 
     void GetGridAreaCorners(const cv::Size& frameSize, const std::vector<cv::Point2f>& moveCorners, 
         const std::vector<cv::Point2f>& staticCorners, int gridWidth, double gridCornersNum[100][100][2])const;
